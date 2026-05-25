@@ -12,7 +12,7 @@ Toda vulnerabilidade em WP cai em uma destas categorias:
 4. **SQL injection** — query sem `$wpdb->prepare()`
 5. **Path traversal / LFI** — paths sem validação
 6. **SSRF** — `wp_remote_get` para URL controlada pelo usuário
-7. **Object injection** — `unserialize()` em input
+7. **Object injection** — `unserialize` em input
 
 Sempre se pergunte para cada bloco de código: **de onde veio esse dado? para onde vai?**
 
@@ -300,13 +300,13 @@ $body = wp_remote_retrieve_body( $response );
 
 | Função | Por quê | Use em vez |
 |---|---|---|
-| `eval()` | Code injection | Refatorar — nunca há razão legítima |
-| `extract( $_POST )` | Variable injection | Atribuir explicitamente |
-| `unserialize( $input )` | Object injection | `json_decode()` ou `maybe_unserialize()` em dado interno apenas |
-| `assert( $code )` | Eval disfarçado | Refatorar |
-| `create_function()` | Eval disfarçado, removido PHP 8 | Closures |
-| `mt_rand()` para tokens | Não criptograficamente seguro | `wp_generate_password()` ou `random_bytes()` |
-| `md5()` / `sha1()` para senhas | Quebráveis | `wp_hash_password()` / `password_hash()` |
+| `eval` com input externo | Code injection | Refatorar — nunca há razão legítima |
+| `extract` em superglobal | Variable injection | Atribuir explicitamente |
+| `unserialize` em input externo | Object injection | `json_decode()` ou `maybe_unserialize` apenas em dado interno |
+| `assert` com string | Eval disfarçado | Refatorar |
+| `create_function` | Eval disfarçado, removido PHP 8 | Closures |
+| `mt_rand` para tokens | Não criptograficamente seguro | `wp_generate_password()` ou `random_bytes()` |
+| `md5` / `sha1` para senhas | Quebráveis | `wp_hash_password()` / `password_hash()` |
 | `$_SERVER['HTTP_HOST']` confiável | Spoofável | Use `home_url()` / `site_url()` |
 | `$_SERVER['REMOTE_ADDR']` atrás de proxy | Pode ser spoofado | Validar contra proxy conhecido |
 | Inclusão de arquivos por path do usuário | LFI/RFI | Allowlist de paths permitidos |

@@ -38,8 +38,8 @@ Rejeição automática se falhar qualquer um:
 - [ ] Todo input externo é sanitizado com função certa
 - [ ] Todo output é escapado (esc_html/esc_attr/esc_url/wp_kses)
 - [ ] Toda query SQL custom usa `$wpdb->prepare()`
-- [ ] Sem `eval()`, `assert()` com strings, `create_function()`
-- [ ] Sem `unserialize()` em input externo
+- [ ] Sem `eval`, `assert` com strings, `create_function`
+- [ ] Sem `unserialize` em input externo
 - [ ] Sem credenciais hardcoded (API keys, secrets)
 - [ ] HTTP requests usam `wp_remote_*` (não `file_get_contents`, `curl_exec`)
 - [ ] REST endpoints têm `permission_callback` (nunca `__return_true` em writes)

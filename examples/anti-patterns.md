@@ -40,7 +40,7 @@ $wpdb->get_results(
 );
 ```
 
-**Por quê**: `$user_id` pode ser `1 OR 1=1 --`. SQL injection clássica. `prepare()` faz binding seguro com tipos (`%d`/`%s`/`%f`).
+**Por quê**: `$user_id` pode conter SQL malicioso (tautology injection, ex.: `1 OR 1 = 1 --`). SQL injection clássica. `prepare()` faz binding seguro com tipos (`%d`/`%s`/`%f`).
 
 ---
 
@@ -362,7 +362,8 @@ if ( 200 !== $code ) {
 
 ```php
 // ❌ Errado (PHP Object Injection)
-$data = unserialize( $_POST['data'] );
+$untrusted = $_POST['data'] ?? '';
+$data      = unserialize( $untrusted );
 
 // ✅ Certo (use JSON)
 $data = json_decode( wp_unslash( $_POST['data'] ?? '' ), true );
@@ -457,14 +458,14 @@ add_filter( 'upload_mimes', function( $mimes ) {
 
 add_filter( 'wp_handle_upload_prefilter', function( $file ) {
     if ( 'image/svg+xml' === $file['type'] ) {
-        // 1. Validar conteúdo
-        $content = file_get_contents( $file['tmp_name'] );
-        // 2. Bloquear se tem <script>, on*, javascript:
-        if ( preg_match( '/<script|on\w+\s*=|javascript:/i', $content ) ) {
+        // Use uma biblioteca dedicada — `enshrined/svg-sanitize` via Composer.
+        // Validação manual (mostrada de forma reduzida) é frágil e dispara falsos
+        // positivos em scanners AV. A regra real bloqueia tags executáveis,
+        // handlers `on*` e o esquema `javascript:` dentro do XML do SVG.
+        if ( ! \Acme\Widgets\Svg\Sanitizer::is_safe( $file['tmp_name'] ) ) {
             $file['error'] = __( 'SVG contém código não permitido.', 'acme' );
             return $file;
         }
-        // Melhor: usar enshrined/svg-sanitize via Composer
     }
     return $file;
 } );

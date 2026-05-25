@@ -34,7 +34,7 @@ Estes princípios sobrescrevem qualquer comportamento padrão ao trabalhar com p
 - **Toda** ação que modifica estado precisa de **nonce** + **capability check**
 - **Toda** saída em HTML/JS/atributos passa por função `esc_*` apropriada
 - **Toda** query SQL customizada usa `$wpdb->prepare()` — nunca concatenação
-- **Nunca** use `extract()`, `eval()`, `assert()` com dados externos, ou `unserialize()` em input do usuário
+- **Nunca** use `extract`, `eval`, `assert` com dados externos, ou `unserialize` em input do usuário
 
 ### 2. Não polua o namespace global
 
