@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<ruleset name="{{PLUGIN_NAME}}">
+	<description>WordPress Coding Standards for {{PLUGIN_NAME}}.</description>
+
+	<file>.</file>
+
+	<exclude-pattern>/vendor/*</exclude-pattern>
+	<exclude-pattern>/node_modules/*</exclude-pattern>
+	<exclude-pattern>/assets/build/*</exclude-pattern>
+	<exclude-pattern>/tests/*</exclude-pattern>
+
+	<arg value="sp"/>
+	<arg name="extensions" value="php"/>
+	<arg name="colors"/>
+	<arg name="parallel" value="8"/>
+
+	<rule ref="WordPress-Extra">
+		<exclude name="WordPress.Files.FileName"/>
+	</rule>
+
+	<rule ref="WordPress-Docs"/>
+
+	<rule ref="PHPCompatibilityWP"/>
+	<config name="testVersion" value="8.0-"/>
+	<config name="minimum_wp_version" value="6.2"/>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="{{TEXT_DOMAIN}}"/>
+			</property>
+		</properties>
+	</rule>
+
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="{{OPTION_PREFIX}}"/>
+				<element value="{{CONST_PREFIX}}"/>
+				<element value="{{NAMESPACE}}"/>
+			</property>
+		</properties>
+	</rule>
+</ruleset>

@@ -1,0 +1,25 @@
+vendor/
+node_modules/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+*.zip
+*.tar.gz
+
+# Build artifacts
+assets/build/
+dist/
+
+# PHPUnit
+.phpunit.result.cache
+coverage/
+
+# Composer
+composer.phar
+
+# Local config
+.env
+.env.local
+wp-cli.local.yml
