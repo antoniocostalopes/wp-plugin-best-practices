@@ -2,15 +2,15 @@
 /**
  * Uninstall handler.
  *
- * Executado quando o usuário deleta o plugin via UI do WordPress.
- * Apenas remove dados se o usuário marcou "delete data on uninstall" nas settings.
+ * Executado quando o utilizador deleta o plugin via UI do WordPress.
+ * Apenas remove dados se o utilizador marcou "delete data on uninstall" nas settings.
  *
  * @package {{NAMESPACE}}
  */
 
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
-// Apenas usuários com permissão devem trigger isso.
+// Apenas utilizadores com permissão devem trigger isso.
 if ( ! current_user_can( 'activate_plugins' ) ) {
 	return;
 }
@@ -78,7 +78,7 @@ foreach ( $posts as $post_id ) {
 $table = $wpdb->prefix . '{{TABLE_NAME}}';
 $wpdb->query( "DROP TABLE IF EXISTS `{$table}`" );
 
-// 5. Remover capabilities customizadas.
+// 5. Remover capabilities personalizadas.
 $capabilities = [ '{{CAPABILITY}}' ];
 foreach ( wp_roles()->roles as $role_name => $role_data ) {
 	$role = get_role( $role_name );

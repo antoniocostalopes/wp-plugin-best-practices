@@ -48,7 +48,7 @@ Resposta.
 
 == Screenshots ==
 
-1. Tela principal de configuração
+1. Ecrã principal de configuração
 2. Widget renderizado no front-end
 3. Editor de blocos com o bloco do plugin
 
