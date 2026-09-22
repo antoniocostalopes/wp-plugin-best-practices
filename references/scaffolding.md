@@ -2,11 +2,33 @@
 
 Referência para criar plugins do zero com estrutura correta.
 
+Handbook: https://developer.wordpress.org/plugins/plugin-basics/
+
+## Conteúdo
+
+- [Decisão inicial: que tipo de plugin?](#decisão-inicial-que-tipo-de-plugin)
+- [Anatomia mínima](#anatomia-mínima)
+- [Header obrigatório](#header-obrigatório)
+- [Bootstrap pattern (OOP recomendado)](#bootstrap-pattern-oop-recomendado)
+- [Classe principal (singleton + service container)](#classe-principal-singleton--service-container)
+- [Ativação — o que fazer](#ativação--o-que-fazer)
+- [Desativação — limpar runtime](#desativação--limpar-runtime)
+- [Uninstall — limpeza completa](#uninstall--limpeza-completa)
+- [Registrando Custom Post Types](#registrando-custom-post-types)
+- [Registrando taxonomias](#registrando-taxonomias)
+- [Registrando metadados (register_post_meta)](#registrando-metadados-register_post_meta)
+- [Registrando blocks Gutenberg](#registrando-blocks-gutenberg)
+- [Shortcodes (legado, ainda útil)](#shortcodes-legado-ainda-útil)
+- [REST API endpoints](#rest-api-endpoints)
+- [Settings page (Settings API)](#settings-page-settings-api)
+- [Estrutura completa de exemplo (OOP)](#estrutura-completa-de-exemplo-oop)
+- [Próximos passos após scaffold](#próximos-passos-após-scaffold)
+
 ## Decisão inicial: que tipo de plugin?
 
 | Tipo | Quando | Estrutura |
 |---|---|---|
-| **Single-file** | Hook ou snippet pequeno (<200 linhas) | 1 arquivo PHP + readme.txt |
+| **Single-file** | Hook ou snippet pequeno (<200 linhas) | 1 ficheiro PHP + readme.txt |
 | **Procedural multi-file** | Plugin médio com várias features | `acme-plugin.php` + `includes/` |
 | **OOP com classes** | Plugin com 5+ módulos, equipa grande | Namespace + PSR-4 autoload |
 | **Composer-based** | Plugin com dependências externas | `composer.json` + vendor |
@@ -17,7 +39,7 @@ Para qualquer tipo acima de single-file, prefira OOP a partir do início — ref
 
 ```
 acme-plugin/
-├── acme-plugin.php         # arquivo principal (header)
+├── acme-plugin.php         # ficheiro principal (header)
 ├── uninstall.php           # cleanup ao desinstalar (opcional mas recomendado)
 ├── readme.txt              # obrigatório se publicar no WP.org
 ├── index.php               # silence is golden
@@ -46,14 +68,14 @@ Cada subdiretório recebe um `index.php` silencioso (`<?php // Silence is golden
 
 ## Header obrigatório
 
-O arquivo principal precisa do header WP. Sem isso, WP não reconhece o plugin:
+O ficheiro principal precisa do header WP. Sem isso, WP não reconhece o plugin:
 
 ```php
 <?php
 /**
  * Plugin Name:       Acme Widgets
  * Plugin URI:        https://acme.example/widgets
- * Description:       Adiciona widgets customizados ao painel.
+ * Description:       Adiciona widgets personalizados ao painel.
  * Version:           1.0.0
  * Requires at least: 6.2
  * Requires PHP:      8.0
@@ -230,7 +252,7 @@ public static function activate(): void {
 }
 ```
 
-**Importante**: `register_activation_hook` roda **antes** dos hooks normais — o `init` não disparou ainda. Portanto **não** chame `register_post_type()` aqui. Ele já estará registrado quando WP rodar próximo `init`, e `flush_rewrite_rules()` aqui pega as rules.
+**Importante**: `register_activation_hook` roda **antes** dos hooks normais — o `init` não disparou ainda. Portanto **não** chame `register_post_type()` aqui. Ele já estará registrado quando WP correr próximo `init`, e `flush_rewrite_rules()` aqui pega as rules.
 
 ## Desativação — limpar runtime
 
@@ -250,11 +272,11 @@ public static function deactivate(): void {
 }
 ```
 
-**Não** apague dados em deactivate — usuário pode estar só trocando de versão. Apague em `uninstall.php`.
+**Não** apague dados em deactivate — utilizador pode estar só trocando de versão. Apague em `uninstall.php`.
 
 ## Uninstall — limpeza completa
 
-`uninstall.php` na raiz do plugin é chamado quando usuário deleta (não desativa) o plugin:
+`uninstall.php` na raiz do plugin é chamado quando utilizador deleta (não desativa) o plugin:
 
 ```php
 <?php
@@ -304,16 +326,18 @@ if ( ! empty( $settings['delete_data_on_uninstall'] ) ) {
 // 3. Limpar cron (caso ainda tenha algo)
 wp_clear_scheduled_hook( 'acme_sync_event' );
 
-// 4. Remover capabilities customizadas
+// 4. Remover capabilities personalizadas
 $role = get_role( 'administrator' );
 if ( $role ) {
     $role->remove_cap( 'manage_acme_widgets' );
 }
 ```
 
-**Importante**: dê ao usuário opção "delete all data on uninstall" no settings page (desligado por padrão). Não destrua dados sem opt-in explícito.
+**Importante**: dê ao utilizador opção "delete all data on uninstall" no settings page (desligado por padrão). Não destrua dados sem opt-in explícito.
 
 ## Registrando Custom Post Types
+
+> Se o CPT precisa de permissões próprias (`capability_type` + `map_meta_cap`), ver `references/capabilities.md` antes de registar — caps mal configuradas bloqueiam até o administrador.
 
 Sempre no hook `init`, nunca em `plugins_loaded` ou `activate`:
 
@@ -336,6 +360,89 @@ add_action( 'init', function() {
     ] );
 } );
 ```
+
+## Registrando taxonomias
+
+```php
+add_action( 'init', function (): void {
+    register_taxonomy( 'acme_region', [ 'acme_order' ], [
+        'labels'            => [ /* ... traduzidos, dentro do init ... */ ],
+        'public'            => true,
+        'hierarchical'      => true,          // true = tipo categoria; false = tipo tag
+        'show_in_rest'      => true,          // necessário para o editor de blocos
+        'show_admin_column' => true,
+        'rewrite'           => [ 'slug' => 'regiao' ],
+        'capabilities'      => [
+            'manage_terms' => 'manage_acme_orders',
+            'edit_terms'   => 'manage_acme_orders',
+            'delete_terms' => 'manage_acme_orders',
+            'assign_terms' => 'edit_acme_orders',
+        ],
+    ] );
+} );
+```
+
+Slug da taxonomia: ≤32 caracteres, minúsculas, sem hífen no identificador interno. Registar depois do `init` faz os termos não aparecerem; registar sem `show_in_rest` tira-a do editor de blocos.
+
+### Term IDs guardados: o split de termos (WP 4.2+)
+
+Antes do WP 4.2, termos com o mesmo slug em taxonomias diferentes **partilhavam o mesmo term ID**. Desde 4.2, ao atualizar um desses termos ele é dividido e **recebe um ID novo**.
+
+Se o plugin guarda term IDs em options, post meta ou user meta, esses IDs podem ficar a apontar para o nada:
+
+```php
+add_action( 'split_shared_term', function ( int $term_id, int $new_term_id, int $term_taxonomy_id, string $taxonomy ): void {
+    if ( 'acme_region' !== $taxonomy ) {
+        return;
+    }
+
+    $featured = (array) get_option( 'acme_featured_regions', [] );
+    $key      = array_search( $term_id, $featured, true );
+
+    if ( false !== $key ) {
+        $featured[ $key ] = $new_term_id;
+        update_option( 'acme_featured_regions', $featured );
+    }
+}, 10, 4 );
+```
+
+Para IDs guardados em post meta, procure com `get_posts()` pelo `meta_value` antigo e atualize. Para verificar um ID isolado depois do facto existe `wp_get_split_term( $old_term_id, $taxonomy )`.
+
+Instalações modernas já fizeram o split há muito; isto importa quando se herda um plugin antigo ou se suportam sites que vieram de antes de 2015.
+
+## Registrando metadados (register_post_meta)
+
+Meta não registada não tem tipo, sanitização, default nem esquema REST. Registe **toda** a meta que o plugin usa, no `init`.
+
+```php
+add_action( 'init', function () {
+    register_post_meta( 'acme_order', '_acme_total', [
+        'type'              => 'number',
+        'description'       => __( 'Total da encomenda.', 'acme-widgets' ),
+        'single'            => true,
+        'default'           => 0,
+        'sanitize_callback' => static fn( $v ): float => (float) $v,
+        'auth_callback'     => static fn( $allowed, $meta_key, $post_id ): bool =>
+            current_user_can( 'edit_post', $post_id ),
+        'show_in_rest'      => true,  // decisão de segurança — ver references/security.md
+    ] );
+} );
+```
+
+| Arg | Nota |
+|---|---|
+| `type` | `string`, `boolean`, `integer`, `number`, `array`, `object`. Obrigatório para REST |
+| `single` | `true` = um valor; `false` = lista. Muda o retorno de `get_post_meta` |
+| `default` | WP 5.5+. Devolvido quando a meta não existe (sem gravar nada) |
+| `sanitize_callback` | Corre em `update_post_meta`. Não substitui sanitização do input do formulário |
+| `auth_callback` | Decide quem escreve via REST. Meta `_` protegida usa `edit_post_meta` por omissão |
+| `show_in_rest` | `true`, ou array com `schema` (obrigatório para `array`/`object`) |
+
+Existem equivalentes: `register_term_meta()`, `register_user_meta()` (WP 6.4+), `register_comment_meta()`, e o genérico `register_meta( $object_type, ... )`.
+
+**Meta pública vs privada:** prefixo `_` esconde dos "Campos personalizados" e ativa o `auth_callback` protegido. Use `_` para tudo o que é interno do plugin.
+
+Para o editor de blocos gravar a meta, ela tem de ter `show_in_rest => true` **e** o `auth_callback` tem de deixar passar quem edita o post.
 
 ## Registrando blocks Gutenberg
 
@@ -383,6 +490,37 @@ function acme_widget_render( $atts ) {
 ```
 
 Shortcodes **sempre retornam string**, nunca ecoam. Use `ob_start()` para capturar templates.
+
+### Atributos: as quatro regras
+
+O utilizador escreve o shortcode à mão — pode passar atributos a mais, a menos, ou com maiúsculas. O handler recebe 3 parâmetros:
+
+```php
+function acme_widget_render( $atts = [], $content = null, $tag = '' ): string {
+    // 1. Normalizar as chaves para minúsculas ([acme_widget ID="3"] funciona)
+    $atts = array_change_key_case( (array) $atts, CASE_LOWER );
+
+    // 2. Defaults + merge com o que o utilizador passou ($tag permite filtrar por shortcode)
+    $atts = shortcode_atts( [ 'id' => 0, 'style' => 'default' ], $atts, $tag );
+
+    // 3. Sanitizar cada valor pelo tipo esperado
+    $id    = absint( $atts['id'] );
+    $style = sanitize_key( $atts['style'] );
+
+    $out = '<div class="acme-widget acme-widget--' . esc_attr( $style ) . '">';
+
+    // 4. Conteúdo entre tags (shortcode envolvente) — nunca o imprima cru
+    if ( null !== $content ) {
+        $out .= apply_filters( 'the_content', $content );
+    }
+
+    return $out . '</div>';
+}
+```
+
+`shortcode_atts` com o 3.º argumento (`$tag`) expõe o filtro `shortcode_atts_{$tag}`, que permite a terceiros mudar os defaults — é a forma de tornar o shortcode extensível.
+
+Registe todos os shortcodes num único sítio, no `init`. E lembre-se: o valor devolvido entra no conteúdo do post, por isso escapar é obrigatório, mesmo quando o atributo "só pode" ter dois valores.
 
 ## REST API endpoints
 

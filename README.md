@@ -2,12 +2,13 @@
 
 > 🤖 **Claude Code Skill** para desenvolvimento profissional de plugins **WordPress 6.x** com PHP **8.0+** (7.4 mínimo absoluto, EOL).
 
-Cobre **auditoria**, **scaffolding**, **implementação guiada** e **checklist pré-publicação** — alinhado com o WordPress Plugin Handbook, WordPress.org Plugin Guidelines e WPCS.
+Cobre **auditoria**, **scaffolding**, **implementação guiada** e **checklist pré-publicação** — incluindo segurança, capabilities, privacidade/RGPD, UI do admin, performance e ferramentas de desenvolvimento. Alinhado com o WordPress Plugin Handbook, as Security APIs, as WordPress.org Plugin Guidelines e o WPCS.
 
 [![WordPress](https://img.shields.io/badge/WordPress-6.2%2B-21759b?logo=wordpress&logoColor=white)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-777bb4?logo=php&logoColor=white)](https://www.php.net/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](#-licença)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-d97757)](https://claude.com/claude-code)
+[![Version](https://img.shields.io/badge/vers%C3%A3o-1.1.0-brightgreen)](CHANGELOG.md)
 
 ---
 
@@ -41,7 +42,7 @@ O Claude Code ativa a skill automaticamente quando o contexto envolve:
 
 - 🆕 Pedidos para **criar / scaffold / auditar / refatorar / publicar** um plugin WordPress
 - 📂 Ficheiros em `wp-content/plugins/`, `mu-plugins/`, ou PHP com header `Plugin Name:`
-- 🔧 Menções a símbolos da Plugin API: `add_action`, `add_filter`, `register_post_type`, `wp_enqueue_script`, `wp_nonce_*`, `WP_Query`, `register_rest_route`, `register_block_type`, `wp_kses`, `sanitize_*`, `esc_*`, `current_user_can`
+- 🔧 Menções a símbolos da Plugin API: `add_action`, `add_filter`, `register_post_type`, `wp_enqueue_script`, `wp_nonce_*`, `WP_Query`, `register_rest_route`, `register_block_type`, `wp_kses`, `sanitize_*`, `esc_*`, `current_user_can`, `add_role`, `map_meta_cap`, `register_post_meta`, `show_in_rest`, `remove_action`
 - 🚀 Conversas sobre publicação no WordPress.org, `readme.txt`, ou GPL para plugins
 
 ---
@@ -63,11 +64,15 @@ A skill identifica automaticamente o modo a partir da intenção:
 
 A skill aplica estes princípios em cima de qualquer comportamento default:
 
+> 🧠 **Base:** os princípios da [Security API](https://developer.wordpress.org/apis/security/) — nunca confiar em input (nem no que vem da própria base de dados), escapar o mais tarde possível, validar antes de sanitizar, allowlist sempre.
+
 1. 🔒 **Segurança por defeito** — toda ação de estado exige nonce + capability check; toda saída passa por função `esc_*`; toda query custom usa `$wpdb->prepare()`; sem `eval`, `extract`, `unserialize` em input externo.
 2. 🏷️ **Sem poluição global** — prefixo único ≥4 caracteres em funções, classes, constantes, hooks, options, meta, capabilities.
 3. 🎣 **Plugin API, não hacks** — hooks em vez de modificar core/tema; `WP_Query` em vez de SQL direto; `wp_enqueue_*` em vez de `<script>` no `wp_head`.
 4. 🌍 **i18n desde o dia 1** — toda string visível passa por `__()` / `esc_html__()`; text domain igual ao slug.
 5. ⚡ **Performance em escala** — transients para queries caras, `autoload=no` em options grandes, enqueue condicionado por página.
+6. 🔑 **Capability, nunca role** — `current_user_can( cap )`; ação sobre objeto usa meta cap + ID (`edit_post`, `$post_id`).
+7. 🕵️ **Privacidade por defeito** — exporter/eraser RGPD se há dados pessoais; contacto com servidor externo só com opt-in explícito (default off).
 
 ---
 
@@ -76,17 +81,22 @@ A skill aplica estes princípios em cima de qualquer comportamento default:
 ```
 wp-plugin-best-practices/
 ├── 📄 SKILL.md                    # Entrada da skill (gatilho + decisão)
+├── 📋 CHANGELOG.md                # Histórico de versões da skill
 ├── 📚 references/
 │   ├── 🔐 security.md             # Nonces, escaping, sanitização, caps, SQL, OWASP
 │   ├── ⚡ performance.md          # Queries, transients, cache, enqueue, autoload
 │   ├── 🏗️ scaffolding.md          # Estrutura, headers, bootstrap, activation/uninstall
 │   ├── 📐 standards.md            # WPCS, prefixos, namespaces, PHPDoc, i18n
-│   ├── ✅ checklist.md            # Checklist pré-publicação WordPress.org
-│   └── 🎣 hooks-catalog.md        # Catálogo de hooks por caso de uso
+│   ├── ✅ checklist.md            # Pré-publicação, 18 guidelines, common issues, revisão automática, SVN
+│   ├── 🎣 hooks-catalog.md        # Catálogo de hooks, remoção de hooks, hooks próprios
+│   ├── 🔑 capabilities.md         # Roles, caps, meta caps, map_meta_cap, caps de CPT
+│   ├── 🕵️ privacy.md              # RGPD: exporter, eraser, política, consentimento
+│   ├── 🛠️ developer-tools.md      # wp-env, Query Monitor, Debug Bar, Plugin Check, WP-CLI, CI, MCP
+│   └── 🖥️ admin-ui.md             # Menus admin, Settings API, meta boxes, campos de perfil
 ├── 🧪 examples/
-│   └── ⚠️ anti-patterns.md        # 20 pares "errado vs certo" para audit/refactor
+│   └── ⚠️ anti-patterns.md        # 27 pares "errado vs certo" para audit/refactor
 └── 📦 templates/
-    ├── plugin-main.php            # Arquivo principal com header completo
+    ├── plugin-main.php            # Ficheiro principal com header completo
     ├── src/Plugin.php             # Classe singleton com lifecycle
     ├── uninstall.php              # Uninstall seguro com opt-in destrutivo
     ├── readme.txt                 # Readme WP.org com todas as secções
@@ -118,6 +128,13 @@ wp-plugin-best-practices/
 | 🗄️ SQL com variáveis | `$wpdb->prepare()` |
 | 👮 Verificar permissão | `current_user_can( 'capability' )` |
 | 🎫 Verificar origem do request | `wp_verify_nonce()` / `check_admin_referer()` / `check_ajax_referer()` |
+| 📄 Output em XML/feed | `esc_xml()` |
+| 🗺️ Validar caminho de ficheiro | `validate_file()` (0 = seguro) + allowlist |
+| ↩️ Redirect com destino de input | `wp_safe_redirect()` |
+| ✔️ Validar valor contra lista | `in_array( $v, $allowed, true )` |
+| 🧍 Permissão sobre um objeto | `current_user_can( 'edit_post', $post_id )` |
+| 🌐 HTTP com URL vinda de input | `wp_safe_remote_get()` / `wp_safe_remote_post()` |
+| 🗂️ Meta com sanitização e auth | `register_post_meta()` com `sanitize_callback` + `auth_callback` |
 
 📖 Detalhe completo em [`references/security.md`](references/security.md).
 
@@ -157,6 +174,10 @@ wp-plugin-best-practices/
 - 📋 [Plugin Guidelines (WordPress.org)](https://developer.wordpress.org/plugins/wordpress-org/detailed-plugin-guidelines/)
 - 🪧 [Plugin Header Requirements](https://developer.wordpress.org/plugins/plugin-basics/header-requirements/)
 - 🛡️ [Plugin Security APIs](https://developer.wordpress.org/apis/security/)
+- 🔑 [Roles & Capabilities](https://developer.wordpress.org/plugins/users/roles-and-capabilities/)
+- 🕵️ [Privacy](https://developer.wordpress.org/plugins/privacy/)
+- 🛠️ [Developer Tools](https://developer.wordpress.org/plugins/developer-tools/)
+- 🌍 [Internationalization](https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/)
 
 ---
 
@@ -169,6 +190,7 @@ Quando contribuíres:
 - 🎨 Mantém consistência com o estilo das referências existentes (tom direto, exemplos código-primeiro)
 - 📌 Cita a fonte oficial (Plugin Handbook / WPCS / Guidelines) ao introduzir uma regra nova
 - ✅ Atualiza o checklist se a regra for bloqueadora de publicação
+- 📋 Regista a alteração no [`CHANGELOG.md`](CHANGELOG.md), seguindo Keep a Changelog + SemVer
 
 ---
 

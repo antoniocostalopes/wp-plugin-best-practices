@@ -2,9 +2,26 @@
 
 Referência detalhada de otimização. Use ao auditar performance, implementar queries pesadas, lidar com tráfego alto, ou diagnosticar lentidão.
 
+Handbook: https://developer.wordpress.org/apis/transients/ · [Object Cache](https://developer.wordpress.org/reference/classes/wp_object_cache/)
+
+## Conteúdo
+
+- [Modelo mental](#modelo-mental)
+- [1. Queries — o maior culpado](#1-queries--o-maior-culpado)
+- [2. Caching](#2-caching)
+- [3. Options API](#3-options-api)
+- [4. Hooks — escolha o certo](#4-hooks--escolha-o-certo)
+- [5. Enqueue de scripts/styles](#5-enqueue-de-scriptsstyles)
+- [6. AJAX e REST — escolha certa](#6-ajax-e-rest--escolha-certa)
+- [7. Tarefas pesadas — não bloqueie request](#7-tarefas-pesadas--não-bloqueie-request)
+- [8. Imagens e mídia](#8-imagens-e-mídia)
+- [9. Database — schema próprio](#9-database--schema-próprio)
+- [10. Profiling](#10-profiling)
+- [Checklist](#checklist)
+
 ## Modelo mental
 
-Cada hit ao WP carrega: core (~400 arquivos), tema, plugins ativos. Cada plugin **deve** custar o mínimo possível em cada request, especialmente em hooks que rodam sempre (`init`, `wp_loaded`, `plugins_loaded`).
+Cada hit ao WP carrega: core (~400 ficheiros), tema, plugins ativos. Cada plugin **deve** custar o mínimo possível em cada request, especialmente em hooks que correm sempre (`init`, `wp_loaded`, `plugins_loaded`).
 
 Métricas que importam:
 
@@ -84,11 +101,11 @@ Se usar `meta_query`, **sempre** combine com `tax_query` ou outro filtro primár
 
 ```php
 $key = 'acme_top_posts_' . $category_id;
-$posts = wp_cache_get( $key, 'acme' );
+$posts = wp_cache_get( $key, 'acme_widgets' );
 
 if ( false === $posts ) {
     $posts = expensive_query();
-    wp_cache_set( $key, $posts, 'acme', HOUR_IN_SECONDS );
+    wp_cache_set( $key, $posts, 'acme_widgets', HOUR_IN_SECONDS );
 }
 ```
 
@@ -134,7 +151,7 @@ Toda option com `autoload=yes` é carregada **em toda request** via single query
 // Option grande ou raramente acessada — autoload=no
 add_option( 'acme_big_data', $data, '', 'no' );
 
-// Update mantém o autoload existente, então setar na criação
+// Update mantém o autoload existente, então definir na criação
 update_option( 'acme_big_data', $data, false );  // false = autoload=no
 ```
 
@@ -148,6 +165,22 @@ ORDER BY size DESC
 LIMIT 20;
 ```
 
+### Uma option com array vs várias options
+
+Cada `get_option()` não-autoloaded é uma transação de base de dados. Um grupo de definições relacionadas guardado como **um array numa option** lê-se e grava-se numa transação só:
+
+```php
+// Preferível para um conjunto de definições relacionadas
+update_option( 'acme_settings', [ 'api_key' => $key, 'mode' => $mode, 'limit' => 10 ] );
+
+$settings = get_option( 'acme_settings', [] );
+echo esc_html( $settings['mode'] ?? 'default' );
+```
+
+Contrapartida: o array inteiro é lido e escrito de cada vez. Separe em options distintas quando os valores são grandes, raramente usados em conjunto, ou escritos com frequências muito diferentes.
+
+Em multisite, options de rede usam a família própria: `add_site_option()`, `get_site_option()`, `update_site_option()`, `delete_site_option()`.
+
 ## 4. Hooks — escolha o certo
 
 | Hook | Dispara | Use para |
@@ -155,14 +188,14 @@ LIMIT 20;
 | `plugins_loaded` | Após todos plugins carregarem | Inicialização leve, registrar classes |
 | `init` | Após plugins+tema carregarem | Registrar CPT, taxonomies, shortcodes, traduções |
 | `wp_loaded` | Após init, antes do query | Raro |
-| `template_redirect` | Antes do template carregar | Redirects, headers customizados |
+| `template_redirect` | Antes do template carregar | Redirects, headers personalizados |
 | `wp_enqueue_scripts` | Front-end enqueue | Scripts/styles do front |
 | `admin_enqueue_scripts` | Admin enqueue | Scripts/styles do admin |
 | `admin_init` | Toda página admin | Processar forms, registrar settings |
 | `wp_footer` / `wp_head` | Render | Output inline (último recurso) |
 | `shutdown` | Pós-response | Logging, cleanup |
 
-**Antipadrão**: rodar lógica pesada em `init` ou `plugins_loaded` em **toda** request. Se o código só faz sentido no admin, hookeie em `admin_init`. Se só em REST, em `rest_api_init`. Se só em uma URL específica, condicione:
+**Antipadrão**: correr lógica pesada em `init` ou `plugins_loaded` em **toda** request. Se o código só faz sentido no admin, hookeie em `admin_init`. Se só em REST, em `rest_api_init`. Se só em uma URL específica, condicione:
 
 ```php
 add_action( 'init', function() {
@@ -212,13 +245,13 @@ add_action( 'wp_enqueue_scripts', function() {
 
 ```php
 // Defer / async (WP 6.3+)
-wp_enqueue_script( 'acme', $src, [], ACME_VERSION, [
+wp_enqueue_script( 'acme-widgets', $src, [], ACME_VERSION, [
     'strategy'  => 'defer',  // ou 'async'
     'in_footer' => true,
 ] );
 
 // Pass data ao JS sem inline echo
-wp_localize_script( 'acme', 'acmeData', [
+wp_localize_script( 'acme-widgets', 'acmeData', [
     'apiUrl' => esc_url_raw( rest_url( 'acme/v1' ) ),
     'nonce'  => wp_create_nonce( 'wp_rest' ),
 ] );
@@ -282,21 +315,65 @@ Para jobs que demoram (envio de email em massa, processamento de imagens, sync d
 ### WP-Cron
 
 ```php
-// Agendar
+// Agendar — o guard NÃO é opcional
 if ( ! wp_next_scheduled( 'acme_sync_event' ) ) {
     wp_schedule_event( time(), 'hourly', 'acme_sync_event' );
 }
+// Sem ele, cada page load agenda outra vez: milhares de eventos duplicados na BD.
 
 // Handler
 add_action( 'acme_sync_event', 'acme_run_sync' );
 
 // Cleanup no deactivate
 register_deactivation_hook( __FILE__, function() {
-    wp_clear_scheduled_hook( 'acme_sync_event' );
+    wp_clear_scheduled_hook( 'acme_sync_event' );   // remove todas as ocorrências do hook
 } );
+
+// Alternativa por timestamp (remove essa e todas as futuras):
+$timestamp = wp_next_scheduled( 'acme_sync_event' );
+if ( $timestamp ) {
+    wp_unschedule_event( $timestamp, 'acme_sync_event' );
+}
 ```
 
-**Cuidado**: WP-Cron roda em request real do usuário (a menos que `DISABLE_WP_CRON` + cron real). Não é pontual nem garantido.
+**Cuidado**: WP-Cron roda em request real do utilizador (a menos que `DISABLE_WP_CRON` + cron real). Não é pontual nem garantido.
+
+#### Intervalos, não horários
+
+WP-Cron não agenda "todos os dias às 03:00" — agenda **primeira execução + intervalo em segundos**. Agendar às 14:00 com intervalo de 300 dá 14:00, 14:05, 14:10…
+
+Intervalos por omissão: `hourly`, `twicedaily`, `daily`, `weekly` (WP 5.4+). Intervalos próprios pelo filtro `cron_schedules` (ver `references/hooks-catalog.md`).
+
+#### Cron real do sistema
+
+```php
+// wp-config.php — deixa de disparar em cada page load
+define( 'DISABLE_WP_CRON', true );
+```
+
+```bash
+# Linux/macOS — crontab -e (a cada 15 minutos)
+*/15 * * * * wget --delete-after https://exemplo.com/wp-cron.php
+
+# --delete-after evita que o wget guarde a resposta em disco
+```
+
+```powershell
+# Windows — Task Scheduler, Basic Task
+powershell "Invoke-WebRequest https://exemplo.com/wp-cron.php"
+```
+
+Alternativa melhor em servidor próprio: `wp cron event run --due-now` por WP-CLI, que não depende de HTTP.
+
+#### Testar e inspecionar
+
+```bash
+wp cron event list              # eventos agendados
+wp cron event run acme_sync_event
+wp cron schedule list           # intervalos disponíveis
+```
+
+Em PHP: `_get_cron_array()` devolve a lista crua de eventos; `wp_get_schedules()` devolve os intervalos registados. Plugin de UI: WP Crontrol (ver `references/developer-tools.md`).
 
 ### Action Scheduler
 
@@ -358,7 +435,7 @@ define( 'SAVEQUERIES', true );
 
 - **New Relic / Blackfire** para produção
 
-## Checklist de auditoria de performance
+## Checklist
 
 - [ ] Nenhuma query em loop sem `_prime_post_caches` ou `update_meta_cache`
 - [ ] `WP_Query` usa `no_found_rows` quando não pagina
